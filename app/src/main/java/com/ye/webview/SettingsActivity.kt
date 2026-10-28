@@ -1,90 +1,113 @@
 package com.ye.webview
 
 import android.os.Bundle
-import android.text.InputType
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.RadioButton
-import android.widget.RadioGroup
-import android.widget.ScrollView
-import android.widget.Switch
-import android.widget.TextView
-import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class SettingsActivity : AppCompatActivity() {
-    private lateinit var store: Store
-
+class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        store = Store(this)
-        val pad = (16 * resources.displayMetrics.density).toInt()
-        val l = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
-        fun header(s: String) = l.addView(TextView(this).apply { text = s; textSize = 18f; setPadding(0, pad, 0, pad / 2) })
-        fun field(label: String, v: String, pwd: Boolean = false): EditText {
-            l.addView(TextView(this).apply { text = label })
-            return EditText(this).apply {
-                setText(v); isSingleLine = true
-                if (pwd) inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                l.addView(this)
-            }
-        }
+        val store = Store(this)
+        setContent { YeTheme { SettingsScreen(store) { finish() } } }
+    }
+}
 
-        header("搜索引擎")
-        val engines = listOf("bing" to "Bing", "google" to "Google", "baidu" to "百度", "duckduckgo" to "DuckDuckGo", "custom" to "自定义")
-        val group = RadioGroup(this)
-        engines.forEachIndexed { i, (k, name) ->
-            group.addView(RadioButton(this).apply { id = 1000 + i; text = name; isChecked = store.engine == k })
+@Composable
+private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column {
+        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
+        Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
         }
-        l.addView(group)
-        val custom = field("自定义模板（用 %s 代表关键词）", store.customTemplate)
+    }
+}
 
-        header("广告拦截")
-        @Suppress("DEPRECATION")
-        val sw = Switch(this).apply { text = "启用广告拦截"; isChecked = store.adBlock }
-        l.addView(sw)
-        val status = TextView(this).apply { text = "当前规则数：${AdBlocker.count()}" }
-        l.addView(status)
-        val listUrl = field("EasyList 订阅地址", store.easyListUrl)
-        l.addView(Button(this).apply {
-            text = "导入 / 更新 EasyList"
-            setOnClickListener {
-                isEnabled = false; status.text = "下载中…"
-                lifecycleScope.launch {
-                    status.text = try {
-                        val n = withContext(Dispatchers.IO) { AdBlocker.importFromUrl(applicationContext, listUrl.text.toString().trim()) }
-                        store.easyListUrl = listUrl.text.toString().trim()
-                        "已导入 $n 个域名，当前规则数：${AdBlocker.count()}"
-                    } catch (e: Exception) { "导入失败：${e.message}" }
-                    isEnabled = true
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(store: Store, onBack: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var engine by remember { mutableStateOf(store.engine) }
+    var custom by remember { mutableStateOf(store.customTemplate) }
+    var adBlock by remember { mutableStateOf(store.adBlock) }
+    var listUrl by remember { mutableStateOf(store.easyListUrl) }
+    var base by remember { mutableStateOf(store.aiBase) }
+    var model by remember { mutableStateOf(store.aiModel) }
+    var key by remember { mutableStateOf(store.aiKey) }
+    var importStatus by remember { mutableStateOf("当前规则数：${AdBlocker.count()}") }
+    var importing by remember { mutableStateOf(false) }
+    val engines = listOf("bing" to "Bing", "google" to "Google", "baidu" to "百度", "duckduckgo" to "DuckDuckGo", "custom" to "自定义")
+
+    fun save() {
+        store.engine = engine; store.customTemplate = custom.trim(); store.adBlock = adBlock
+        store.easyListUrl = listUrl.trim(); store.aiBase = base.trim(); store.aiModel = model.trim(); store.aiKey = key.trim()
+        android.widget.Toast.makeText(ctx, "已保存", android.widget.Toast.LENGTH_SHORT).show()
+        onBack()
+    }
+
+    Scaffold(topBar = {
+        TopAppBar(title = { Text("设置") },
+            navigationIcon = { IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回") } },
+            actions = { TextButton(::save) { Text("保存") } })
+    }) { pad ->
+        Column(Modifier.padding(pad).fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            Section("搜索引擎") {
+                engines.forEach { (k, n) ->
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { engine = k },
+                        verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(engine == k, { engine = k }); Text(n)
+                    }
                 }
+                if (engine == "custom") OutlinedTextField(custom, { custom = it }, Modifier.fillMaxWidth(),
+                    label = { Text("模板（%s 代表关键词）") }, singleLine = true, shape = RoundedCornerShape(16.dp))
             }
-        })
-
-        header("AI（OpenAI 兼容接口）")
-        val base = field("Base URL", store.aiBase)
-        val model = field("模型", store.aiModel)
-        val key = field("API Key（仅保存在本机）", store.aiKey, true)
-
-        l.addView(Button(this).apply {
-            text = "保存"
-            setOnClickListener {
-                val idx = group.checkedRadioButtonId - 1000
-                if (idx in engines.indices) store.engine = engines[idx].first
-                store.customTemplate = custom.text.toString().trim()
-                store.adBlock = sw.isChecked
-                store.aiBase = base.text.toString().trim()
-                store.aiModel = model.text.toString().trim()
-                store.aiKey = key.text.toString().trim()
-                Toast.makeText(this@SettingsActivity, "已保存", Toast.LENGTH_SHORT).show()
-                finish()
+            Section("广告拦截") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("启用广告拦截", Modifier.weight(1f)); Switch(adBlock, { adBlock = it })
+                }
+                OutlinedTextField(listUrl, { listUrl = it }, Modifier.fillMaxWidth(), label = { Text("EasyList 订阅地址") },
+                    singleLine = true, shape = RoundedCornerShape(16.dp))
+                FilledTonalButton(enabled = !importing, onClick = {
+                    importing = true; importStatus = "下载中…"
+                    scope.launch {
+                        importStatus = try {
+                            val n = withContext(Dispatchers.IO) { AdBlocker.importFromUrl(ctx.applicationContext, listUrl.trim()) }
+                            store.easyListUrl = listUrl.trim()
+                            "已导入 $n 个域名，当前规则数：${AdBlocker.count()}"
+                        } catch (e: Exception) { "导入失败：${e.message}" }
+                        importing = false
+                    }
+                }) { Text("导入 / 更新 EasyList") }
+                Text(importStatus, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-        })
-        setContentView(ScrollView(this).apply { addView(l) })
+            Section("AI（OpenAI 兼容接口）") {
+                OutlinedTextField(base, { base = it }, Modifier.fillMaxWidth(), label = { Text("Base URL") }, singleLine = true, shape = RoundedCornerShape(16.dp))
+                OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), label = { Text("模型") }, singleLine = true, shape = RoundedCornerShape(16.dp))
+                OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), label = { Text("API Key（仅保存在本机）") }, singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(16.dp))
+            }
+            Button(::save, Modifier.fillMaxWidth().height(52.dp)) { Text("保存") }
+        }
     }
 }
