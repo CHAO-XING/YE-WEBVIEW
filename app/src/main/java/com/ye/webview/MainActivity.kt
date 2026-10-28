@@ -142,15 +142,15 @@ class MainActivity : AppCompatActivity() {
                 return true
             }
             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
-                if (view == currentWeb) { urlBar.setText(url); progress.visibility = View.VISIBLE }
+                if (view == currentWeb) { urlBar.setText(url); this@MainActivity.progress.visibility = View.VISIBLE }
             }
             override fun onPageFinished(view: WebView, url: String?) {
-                if (view == currentWeb) progress.visibility = View.GONE
+                if (view == currentWeb) this@MainActivity.progress.visibility = View.GONE
                 store.addHistory(Entry(view.title ?: url ?: "", url ?: ""))
             }
         }
         webChromeClient = object : WebChromeClient() {
-            override fun onProgressChanged(view: WebView, p: Int) { if (view == currentWeb) progress.progress = p }
+            override fun onProgressChanged(view: WebView, p: Int) { if (view == currentWeb) this@MainActivity.progress.progress = p }
         }
     }
 
