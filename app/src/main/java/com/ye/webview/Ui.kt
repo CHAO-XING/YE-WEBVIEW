@@ -400,7 +400,7 @@ fun MoreSheet(b: Browser, onDismiss: () -> Unit, onAction: (String) -> Unit) {
 @Composable
 fun EntrySheet(kind: String, b: Browser, onDismiss: () -> Unit) {
     val isBm = kind == "bookmarks"
-    var list by remember { mutableStateOf(if (isBm) b.store.bookmarks() else b.store.history()) }
+    var list by remember { mutableStateOf<List<Entry>>(if (isBm) b.store.bookmarks() else b.store.history()) }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
         Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (isBm) "书签" else "历史记录", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
