@@ -11,6 +11,8 @@ shot 1_home 8
 shot 2_page 20 --es shot page
 shot 3_more 22 --es shot more
 shot 4_tabs 30 --es shot tabs
+shot 8_home_grid 8
+shot 9_edit_dialog 8 --es shot edit
 adb shell cmd uimode night yes; sleep 3
 shot 5_home_dark 8
 shot 6_page_dark 20 --es shot page

@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         browser.adBlock = store.adBlock
+        browser.shortcuts = store.shortcuts()
     }
 
     override fun onDestroy() {

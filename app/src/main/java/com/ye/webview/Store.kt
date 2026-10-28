@@ -73,5 +73,34 @@ class Store(ctx: Context) {
         val l = history(); l.removeAll { it.url == e.url }; l.add(0, e)
         save("history", l.take(500))
     }
+    fun shortcuts(): MutableList<Entry> {
+        if (!sp.contains("shortcuts")) save("shortcuts", DEFAULT_SHORTCUTS)
+        return load("shortcuts")
+    }
+    fun saveShortcuts(l: List<Entry>) = save("shortcuts", l)
+    fun addShortcut(e: Entry) { val l = shortcuts(); l.removeAll { it.url == e.url }; l.add(e); saveShortcuts(l) }
+    fun resetShortcuts() = saveShortcuts(DEFAULT_SHORTCUTS)
+
+    companion object {
+        val DEFAULT_SHORTCUTS = listOf(
+            Entry("Bing", "https://www.bing.com"), Entry("百度", "https://www.baidu.com"),
+            Entry("知乎", "https://www.zhihu.com"), Entry("哔哩哔哩", "https://www.bilibili.com"),
+            Entry("GitHub", "https://github.com"), Entry("微博", "https://weibo.com"),
+            Entry("豆瓣", "https://www.douban.com"), Entry("维基百科", "https://zh.wikipedia.org"),
+        )
+
+        /** Normalize user-typed URL; returns null if invalid. */
+        fun normalizeUrl(input: String): String? {
+            var s = input.trim()
+            if (s.isEmpty() || s.contains(' ')) return null
+            if (!Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://").containsMatchIn(s)) s = "https://$s"
+            val u = android.net.Uri.parse(s)
+            val host = u.host ?: return null
+            if (u.scheme != "http" && u.scheme != "https") return null
+            if (!(host.contains('.') || host == "localhost")) return null
+            return s
+        }
+    }
+
     fun clearHistory() = save("history", emptyList())
 }

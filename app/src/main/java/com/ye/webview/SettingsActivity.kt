@@ -107,6 +107,14 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                 OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), label = { Text("API Key（仅保存在本机）") }, singleLine = true,
                     visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(16.dp))
             }
+            Section("主页快捷方式") {
+                Text("在主页点「编辑」或长按图标可增删改；此处可恢复默认。", style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedButton({
+                    store.resetShortcuts()
+                    android.widget.Toast.makeText(ctx, "已恢复默认快捷方式", android.widget.Toast.LENGTH_SHORT).show()
+                }) { Text("恢复默认") }
+            }
             Button(::save, Modifier.fillMaxWidth().height(52.dp)) { Text("保存") }
         }
     }

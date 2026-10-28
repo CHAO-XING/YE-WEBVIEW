@@ -13,6 +13,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -81,6 +83,7 @@ fun BrowserApp(b: Browser, shot: String?, onSettings: () -> Unit, onFinish: () -
     LaunchedEffect(shot) {
         when (shot) {
             "page" -> b.go(DEMO_PAGE)
+            "edit" -> { delay(2500); b.demoDialog = true }
             "more" -> { b.go(DEMO_PAGE); delay(6000); showMore = true }
             "tabs" -> {
                 b.go(DEMO_PAGE); delay(5000)
@@ -140,6 +143,10 @@ fun BrowserApp(b: Browser, shot: String?, onSettings: () -> Unit, onFinish: () -
             }
             "ai" -> if (t.isHome) Toast.makeText(ctx, "请先打开一个网页", Toast.LENGTH_SHORT).show() else showAi = true
             "settings" -> onSettings()
+            "tohome" -> if (t.isHome) Toast.makeText(ctx, "请先打开一个网页", Toast.LENGTH_SHORT).show() else {
+                b.updateShortcuts(b.shortcuts.filter { it.url != t.url } + Entry(t.title.ifBlank { displayUrl(t.url) }.take(20), t.url ?: ""))
+                Toast.makeText(ctx, "已添加到主页", Toast.LENGTH_SHORT).show()
+            }
         }
     }
     listSheet?.let { kind -> EntrySheet(kind, b) { listSheet = null } }
@@ -243,54 +250,157 @@ fun SiteIcon(url: String, title: String, size: Dp) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomePage(b: Browser) {
     val cs = MaterialTheme.colorScheme
-    val sites = remember(b.tabs.size, b.current) {
-        (b.store.bookmarks().take(8).map { Site(it.title, it.url) } + DEFAULT_SITES)
-            .distinctBy { hostOf(it.url) }.take(12)
-    }
     var q by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally) {
-        Spacer(Modifier.height(64.dp))
-        Text("YE", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold, color = cs.primary)
-        Text("干净 · 无广告 · AI 阅读", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
-        Spacer(Modifier.height(28.dp))
-        Surface(shape = RoundedCornerShape(50), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth().height(56.dp)) {
-            Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Search, null, tint = cs.onSurfaceVariant)
-                Spacer(Modifier.width(12.dp))
-                BasicTextField(q, { q = it }, singleLine = true, modifier = Modifier.weight(1f),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = cs.onSurface),
-                    cursorBrush = SolidColor(cs.primary),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { b.go(q) }),
-                    decorationBox = { inner ->
-                        Box(contentAlignment = Alignment.CenterStart) {
-                            if (q.isEmpty()) Text("搜索", color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
-                            inner()
-                        }
-                    })
-            }
+    var editMode by remember { mutableStateOf(false) }
+    var dialog by remember { mutableStateOf<Pair<Int, Entry>?>(null) } // index -1 = add
+    LaunchedEffect(b.demoDialog) { if (b.demoDialog) { dialog = -1 to Entry("", ""); b.demoDialog = false } }
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val list = b.shortcuts
+
+    fun delete(i: Int) {
+        val old = b.shortcuts
+        val e = old[i]
+        b.updateShortcuts(old.filterIndexed { j, _ -> j != i })
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val r = snackbar.showSnackbar("已删除「${e.title}」", actionLabel = "撤销", duration = SnackbarDuration.Short)
+            if (r == SnackbarResult.ActionPerformed) b.updateShortcuts(old)
         }
-        Spacer(Modifier.height(32.dp))
-        sites.chunked(4).forEach { row ->
-            Row(Modifier.fillMaxWidth()) {
-                row.forEach { s ->
-                    Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { b.go(s.url) }.padding(vertical = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally) {
-                        SiteIcon(s.url, s.title, 48.dp)
-                        Spacer(Modifier.height(6.dp))
-                        Text(s.title.ifBlank { hostOf(s.url) }, style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
-                    }
-                }
-                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
-            }
-        }
-        Spacer(Modifier.height(24.dp))
     }
+    fun move(i: Int, d: Int) {
+        val l = b.shortcuts.toMutableList(); val j = i + d
+        if (j !in l.indices) return
+        val t = l[i]; l[i] = l[j]; l[j] = t
+        b.updateShortcuts(l)
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Spacer(Modifier.height(56.dp))
+            Text("YE", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold, color = cs.primary)
+            Text("干净 · 无广告 · AI 阅读", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+            Spacer(Modifier.height(28.dp))
+            Surface(shape = RoundedCornerShape(50), color = cs.surfaceContainerHigh, modifier = Modifier.fillMaxWidth().height(56.dp)) {
+                Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Search, null, tint = cs.onSurfaceVariant)
+                    Spacer(Modifier.width(12.dp))
+                    BasicTextField(q, { q = it }, singleLine = true, modifier = Modifier.weight(1f),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = cs.onSurface),
+                        cursorBrush = SolidColor(cs.primary),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { b.go(q) }),
+                        decorationBox = { inner ->
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (q.isEmpty()) Text("搜索", color = cs.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+                                inner()
+                            }
+                        })
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("快捷方式", style = MaterialTheme.typography.titleSmall, color = cs.onSurfaceVariant, modifier = Modifier.weight(1f))
+                TextButton({ editMode = !editMode }) {
+                    Icon(if (editMode) Icons.Filled.Check else Icons.Filled.Edit, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (editMode) "完成" else "编辑")
+                }
+            }
+            val tiles: List<Pair<Int, Entry?>> = list.mapIndexed { i, e -> i to e } + listOf(-1 to null)
+            tiles.chunked(4).forEach { row ->
+                Row(Modifier.fillMaxWidth()) {
+                    row.forEach { (i, e) ->
+                        Box(Modifier.weight(1f)) {
+                            if (e == null) {
+                                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                                    .clickable { dialog = -1 to Entry("", "") }.padding(vertical = 10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).border(1.5.dp, cs.outlineVariant, RoundedCornerShape(14.dp)),
+                                        contentAlignment = Alignment.Center) { Icon(Icons.Filled.Add, "添加", tint = cs.primary) }
+                                    Spacer(Modifier.height(6.dp))
+                                    Text("添加", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                                }
+                            } else key(e.url) {
+                                var menu by remember { mutableStateOf(false) }
+                                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                                    .combinedClickable(onClick = { if (editMode) dialog = i to e else b.go(e.url) }, onLongClick = { menu = true })
+                                    .padding(vertical = 10.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box {
+                                        SiteIcon(e.url, e.title, 48.dp)
+                                        if (editMode) Box(Modifier.align(Alignment.TopEnd).offset(6.dp, (-6).dp).size(20.dp).clip(CircleShape)
+                                            .background(cs.error).clickable { delete(i) }, contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Filled.Close, "删除", Modifier.size(14.dp), tint = cs.onError)
+                                        }
+                                    }
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(e.title.ifBlank { hostOf(e.url) }, style = MaterialTheme.typography.labelMedium,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
+                                }
+                                DropdownMenu(menu, { menu = false }, shape = RoundedCornerShape(16.dp)) {
+                                    DropdownMenuItem(text = { Text("编辑") }, leadingIcon = { Icon(Icons.Filled.Edit, null) },
+                                        onClick = { menu = false; dialog = i to e })
+                                    DropdownMenuItem(text = { Text("删除") }, leadingIcon = { Icon(Icons.Outlined.Delete, null) },
+                                        onClick = { menu = false; delete(i) })
+                                    if (i > 0) DropdownMenuItem(text = { Text("移到前面") },
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }, onClick = { menu = false; move(i, -1) })
+                                    if (i < list.size - 1) DropdownMenuItem(text = { Text("移到后面") },
+                                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.ArrowForward, null) }, onClick = { menu = false; move(i, 1) })
+                                }
+                            }
+                        }
+                    }
+                    repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+        }
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+    }
+
+    dialog?.let { (i, e) ->
+        ShortcutDialog(e, i < 0, onDismiss = { dialog = null }) { ne ->
+            val l = b.shortcuts.toMutableList()
+            if (i < 0 || i >= l.size) { l.removeAll { it.url == ne.url }; l.add(ne) } else l[i] = ne
+            b.updateShortcuts(l); dialog = null
+        }
+    }
+}
+
+@Composable
+fun ShortcutDialog(init: Entry, isNew: Boolean, onDismiss: () -> Unit, onSave: (Entry) -> Unit) {
+    var name by remember { mutableStateOf(init.title) }
+    var url by remember { mutableStateOf(init.url) }
+    var err by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(if (isNew) Icons.Filled.Add else Icons.Filled.Edit, null) },
+        title = { Text(if (isNew) "添加快捷方式" else "编辑快捷方式") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("名称") },
+                    singleLine = true, shape = RoundedCornerShape(16.dp))
+                OutlinedTextField(url, { url = it; err = null }, Modifier.fillMaxWidth(), label = { Text("网址") },
+                    placeholder = { Text("example.com") }, singleLine = true, isError = err != null,
+                    supportingText = err?.let { m -> { Text(m) } },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+                    shape = RoundedCornerShape(16.dp))
+            }
+        },
+        confirmButton = {
+            TextButton({
+                val n = Store.normalizeUrl(url)
+                if (n == null) err = "请输入有效的网址" else onSave(Entry(name.trim().ifBlank { hostOf(n) }, n))
+            }) { Text("保存") }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("取消") } }
+    )
 }
 
 @Composable
@@ -363,6 +473,7 @@ fun MoreSheet(b: Browser, onDismiss: () -> Unit, onAction: (String) -> Unit) {
         Triple("reload", "刷新", Icons.Filled.Refresh),
         Triple("share", "分享", Icons.Outlined.Share),
         Triple("ai", "AI 摘要", Icons.Filled.AutoAwesome),
+        Triple("tohome", "添加到主页", Icons.Filled.AddToHomeScreen),
         Triple("settings", "设置", Icons.Outlined.Settings),
     )
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = cs.surfaceContainerLow) {
@@ -400,6 +511,7 @@ fun MoreSheet(b: Browser, onDismiss: () -> Unit, onAction: (String) -> Unit) {
 @Composable
 fun EntrySheet(kind: String, b: Browser, onDismiss: () -> Unit) {
     val isBm = kind == "bookmarks"
+    val ctx = LocalContext.current
     var list by remember { mutableStateOf<List<Entry>>(if (isBm) b.store.bookmarks() else b.store.history()) }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
         Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -414,7 +526,13 @@ fun EntrySheet(kind: String, b: Browser, onDismiss: () -> Unit) {
                     supportingContent = { Text(e.url, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     leadingContent = { SiteIcon(e.url, e.title, 40.dp) },
                     trailingContent = if (isBm) { {
-                        IconButton({ b.store.removeBookmark(e.url); list = b.store.bookmarks() }) { Icon(Icons.Outlined.Delete, "删除") }
+                        Row {
+                            IconButton({
+                                b.updateShortcuts(b.shortcuts.filter { it.url != e.url } + Entry(e.title.ifBlank { hostOf(e.url) }.take(20), e.url))
+                                Toast.makeText(ctx, "已添加到主页", Toast.LENGTH_SHORT).show()
+                            }) { Icon(Icons.Filled.AddToHomeScreen, "添加到主页") }
+                            IconButton({ b.store.removeBookmark(e.url); list = b.store.bookmarks() }) { Icon(Icons.Outlined.Delete, "删除") }
+                        }
                     } } else null,
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier.clickable { b.go(e.url); onDismiss() }

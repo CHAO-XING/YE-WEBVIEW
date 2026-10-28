@@ -37,6 +37,9 @@ class Browser(private val act: Activity, val store: Store) {
     var current by mutableIntStateOf(0)
     var barsVisible by mutableStateOf(true)
     var adBlock by mutableStateOf(store.adBlock)
+    var shortcuts by mutableStateOf<List<Entry>>(store.shortcuts())
+    var demoDialog by mutableStateOf(false)
+    fun updateShortcuts(l: List<Entry>) { store.saveShortcuts(l); shortcuts = l }
     private var nextId = 1L
 
     val tab: Tab get() = tabs[current.coerceIn(0, tabs.size - 1)]
