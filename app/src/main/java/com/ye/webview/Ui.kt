@@ -343,7 +343,7 @@ fun HomePage(b: Browser) {
                                     Text(e.title.ifBlank { hostOf(e.url) }, style = MaterialTheme.typography.labelMedium,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp))
                                 }
-                                DropdownMenu(menu, { menu = false }, shape = RoundedCornerShape(16.dp)) {
+                                DropdownMenu(menu, { menu = false }) {
                                     DropdownMenuItem(text = { Text("编辑") }, leadingIcon = { Icon(Icons.Filled.Edit, null) },
                                         onClick = { menu = false; dialog = i to e })
                                     DropdownMenuItem(text = { Text("删除") }, leadingIcon = { Icon(Icons.Outlined.Delete, null) },
