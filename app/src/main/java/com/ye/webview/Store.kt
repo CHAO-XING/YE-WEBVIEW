@@ -43,6 +43,15 @@ class Store(ctx: Context) {
     var ttsVoice: String
         get() = sp.getString("tts_voice", "zh-CN-XiaoxiaoNeural")!!
         set(v) = sp.edit().putString("tts_voice", v).apply()
+    var ttsAutoVoice: Boolean
+        get() = sp.getBoolean("tts_auto_voice", true)
+        set(v) = sp.edit().putBoolean("tts_auto_voice", v).apply()
+    var ttsVoiceZh: String
+        get() = sp.getString("tts_voice_zh", "zh-CN-XiaoxiaoNeural")!!
+        set(v) = sp.edit().putString("tts_voice_zh", v).apply()
+    var ttsVoiceEn: String
+        get() = sp.getString("tts_voice_en", "en-US-JennyNeural")!!
+        set(v) = sp.edit().putString("tts_voice_en", v).apply()
 
     fun searchUrl(q: String): String {
         val e = java.net.URLEncoder.encode(q, "UTF-8")

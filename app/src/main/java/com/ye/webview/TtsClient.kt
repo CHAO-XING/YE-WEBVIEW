@@ -19,7 +19,7 @@ class TtsClient(private val store: Store) {
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    suspend fun synthesize(text: String): ByteArray = withContext(Dispatchers.IO) {
+    suspend fun synthesize(text: String, voice: String? = null): ByteArray = withContext(Dispatchers.IO) {
         if (text.isBlank()) throw RuntimeException("TTS text is empty")
 
         val base = store.ttsBase.trim().trimEnd('/')
@@ -28,7 +28,7 @@ class TtsClient(private val store: Store) {
 
         val payload = JSONObject()
             .put("text", text)
-            .put("voice", store.ttsVoice.ifBlank { DEFAULT_VOICE })
+            .put("voice", voice?.takeIf { it.isNotBlank() } ?: resolveVoice(text))
             .put("rate", "+0%")
             .put("volume", "+0%")
             .put("pitch", "+0Hz")
@@ -60,6 +60,29 @@ class TtsClient(private val store: Store) {
             }
             bytes
         }
+    }
+
+    fun resolveVoice(text: String): String {
+        if (!store.ttsAutoVoice) return store.ttsVoice.ifBlank { DEFAULT_VOICE }
+        return when (detectLanguage(text)) {
+            "zh" -> store.ttsVoiceZh.ifBlank { DEFAULT_VOICE_ZH }
+            "en" -> store.ttsVoiceEn.ifBlank { DEFAULT_VOICE_EN }
+            else -> store.ttsVoice.ifBlank { DEFAULT_VOICE }
+        }
+    }
+
+    fun detectLanguage(text: String): String {
+        var cjk = 0
+        var latin = 0
+        for (c in text) {
+            when {
+                c in '\u4E00'..'\u9FFF' -> cjk++
+                c in 'A'..'Z' || c in 'a'..'z' -> latin++
+            }
+        }
+        if (cjk < 3 && latin < 3) return "unknown"
+        if (cjk + latin < 3) return "unknown"
+        return if (cjk >= latin) "zh" else "en"
     }
 
     suspend fun health(): Boolean = withContext(Dispatchers.IO) {
@@ -142,6 +165,8 @@ class TtsClient(private val store: Store) {
 
     private companion object {
         const val DEFAULT_VOICE = "zh-CN-XiaoxiaoNeural"
+        const val DEFAULT_VOICE_ZH = "zh-CN-XiaoxiaoNeural"
+        const val DEFAULT_VOICE_EN = "en-US-JennyNeural"
         const val MIN_CHUNK = 800
         const val BREAK_CHARS = "。！？!?；;，,、.…"
         const val SENTENCE_ENDS = "。！？!?；;."

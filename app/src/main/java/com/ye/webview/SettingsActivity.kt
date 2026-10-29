@@ -58,6 +58,9 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
     var ttsBase by remember { mutableStateOf(store.ttsBase) }
     var ttsKey by remember { mutableStateOf(store.ttsKey) }
     var ttsVoice by remember { mutableStateOf(store.ttsVoice) }
+    var ttsAutoVoice by remember { mutableStateOf(store.ttsAutoVoice) }
+    var ttsVoiceZh by remember { mutableStateOf(store.ttsVoiceZh) }
+    var ttsVoiceEn by remember { mutableStateOf(store.ttsVoiceEn) }
     var importStatus by remember { mutableStateOf("当前规则数：${AdBlocker.count()}") }
     var importing by remember { mutableStateOf(false) }
     val engines = listOf("bing" to "Bing", "google" to "Google", "baidu" to "百度", "duckduckgo" to "DuckDuckGo", "custom" to "自定义")
@@ -66,6 +69,7 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
         store.engine = engine; store.customTemplate = custom.trim(); store.adBlock = adBlock
         store.easyListUrl = listUrl.trim(); store.aiBase = base.trim(); store.aiModel = model.trim(); store.aiKey = key.trim()
         store.ttsEnabled = ttsOn; store.ttsBase = ttsBase.trim(); store.ttsKey = ttsKey.trim(); store.ttsVoice = ttsVoice.trim()
+        store.ttsAutoVoice = ttsAutoVoice; store.ttsVoiceZh = ttsVoiceZh.trim(); store.ttsVoiceEn = ttsVoiceEn.trim()
         android.widget.Toast.makeText(ctx, "已保存", android.widget.Toast.LENGTH_SHORT).show()
         onBack()
     }
@@ -120,7 +124,14 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                     singleLine = true, shape = RoundedCornerShape(16.dp))
                 OutlinedTextField(ttsKey, { ttsKey = it }, Modifier.fillMaxWidth(), label = { Text("Bearer Token（仅保存在本机）") },
                     singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(16.dp))
-                OutlinedTextField(ttsVoice, { ttsVoice = it }, Modifier.fillMaxWidth(), label = { Text("Voice") },
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("自动选中/英音色", Modifier.weight(1f)); Switch(ttsAutoVoice, { ttsAutoVoice = it })
+                }
+                OutlinedTextField(ttsVoice, { ttsVoice = it }, Modifier.fillMaxWidth(), label = { Text("兜底 Voice（难判时）") },
+                    singleLine = true, shape = RoundedCornerShape(16.dp))
+                OutlinedTextField(ttsVoiceZh, { ttsVoiceZh = it }, Modifier.fillMaxWidth(), label = { Text("中文 Voice") },
+                    singleLine = true, shape = RoundedCornerShape(16.dp))
+                OutlinedTextField(ttsVoiceEn, { ttsVoiceEn = it }, Modifier.fillMaxWidth(), label = { Text("英文 Voice") },
                     singleLine = true, shape = RoundedCornerShape(16.dp))
             }
             Section("主页快捷方式") {
