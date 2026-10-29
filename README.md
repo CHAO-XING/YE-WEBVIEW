@@ -8,6 +8,7 @@
 - **广告拦截**：内置小型默认域名列表；可在设置中从 URL 导入 EasyList（解析 `||domain^` 规则），在 `shouldInterceptRequest` 中按域名及其父域名匹配拦截；可开关。
 - **干净主页**，工具栏直接进入设置。
 - **AI 按钮**：用 `evaluateJavascript` 提取页面正文（优先 article/main，否则取最大文本块，截断至 12000 字），发送到可配置的 OpenAI 兼容接口，在底部弹窗中显示摘要并支持追问。
+- **朗读**：选中文字出现「朗读」菜单；更多菜单「朗读本页」抽取正文后走香港 edge-tts 反代合成 MP3，系统 MediaPlayer 播放。设置中可配 Base URL / Bearer Token / Voice。
 
 ## 下载 APK
 - 最新调试版（Releases）：https://github.com/CHAO-XING/YE-WEBVIEW/releases/download/latest-debug/app-debug.apk
@@ -25,6 +26,13 @@
 - API Key：填入你的 Key，仅保存在本机
 也可改为 OpenAI、Moonshot、本地 Ollama 等任何 OpenAI 兼容服务。
 
+## 配置朗读（edge-tts）
+设置 → 「朗读（edge-tts）」：
+- TTS Base URL：默认 `https://work.yebrewing.com/edge-tts`（自动请求 `/tts`）
+- Bearer Token：填入你的 Token，仅保存在本机（不要提交到仓库）
+- Voice：默认 `zh-CN-XiaoxiaoNeural`
+网页选中文字后点系统选区菜单「朗读」，或更多菜单「朗读本页」。
+
 ## 本地构建
 需要 JDK 17 和 Android SDK（compileSdk 34）：
 ```bash
@@ -38,5 +46,6 @@ cd YE-WEBVIEW
 - [ ] AI 操作网页（自动点击、填表、多步任务）
 - [ ] 标签页/书签同步与导入导出
 - [ ] 元素隐藏规则（EasyList `##` 规则）与定时更新订阅
+- [x] 朗读（选区 / 本页 + edge-tts）
 - [ ] 阅读模式、夜间模式、下载管理
 - [ ] 正式签名的 Release 版本
