@@ -31,6 +31,19 @@ class Store(ctx: Context) {
         get() = sp.getString("ai_key", "")!!
         set(v) = sp.edit().putString("ai_key", v).apply()
 
+    var ttsEnabled: Boolean
+        get() = sp.getBoolean("tts_enabled", true)
+        set(v) = sp.edit().putBoolean("tts_enabled", v).apply()
+    var ttsBase: String
+        get() = sp.getString("tts_base", "https://work.yebrewing.com/edge-tts")!!
+        set(v) = sp.edit().putString("tts_base", v).apply()
+    var ttsKey: String
+        get() = sp.getString("tts_key", "")!!
+        set(v) = sp.edit().putString("tts_key", v).apply()
+    var ttsVoice: String
+        get() = sp.getString("tts_voice", "zh-CN-XiaoxiaoNeural")!!
+        set(v) = sp.edit().putString("tts_voice", v).apply()
+
     fun searchUrl(q: String): String {
         val e = java.net.URLEncoder.encode(q, "UTF-8")
         val t = when (engine) {

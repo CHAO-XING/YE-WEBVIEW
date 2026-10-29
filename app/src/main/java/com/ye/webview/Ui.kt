@@ -98,6 +98,7 @@ fun BrowserApp(b: Browser, shot: String?, onSettings: () -> Unit, onFinish: () -
         if (showTabs) showTabs = false else if (!b.back()) onFinish()
     }
 
+    Box(Modifier.fillMaxSize()) {
     Surface(Modifier.fillMaxSize(), color = cs.surfaceContainer) {
         if (showTabs) {
             TabsScreen(b) { showTabs = false }
@@ -142,6 +143,27 @@ fun BrowserApp(b: Browser, shot: String?, onSettings: () -> Unit, onFinish: () -
                 ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, it), "分享"))
             }
             "ai" -> if (t.isHome) Toast.makeText(ctx, "请先打开一个网页", Toast.LENGTH_SHORT).show() else showAi = true
+            "tts" -> {
+                if (t.isHome) Toast.makeText(ctx, "请先打开一个网页", Toast.LENGTH_SHORT).show()
+                else if (!b.store.ttsEnabled) Toast.makeText(ctx, "朗读已关闭，请在设置中开启", Toast.LENGTH_SHORT).show()
+                else {
+                    val w = t.webView
+                    if (w == null) Toast.makeText(ctx, "请先打开一个网页", Toast.LENGTH_SHORT).show()
+                    else {
+                        Toast.makeText(ctx, "正在提取正文…", Toast.LENGTH_SHORT).show()
+                        w.evaluateJavascript(EXTRACT_JS) { raw ->
+                            try {
+                                val json = JSONObject(JSONArray("[$raw]").getString(0))
+                                val body = json.optString("text").trim()
+                                if (body.isBlank()) Toast.makeText(ctx, "未能提取到正文", Toast.LENGTH_SHORT).show()
+                                else b.speakText(body.take(12000))
+                            } catch (e: Exception) {
+                                Toast.makeText(ctx, "提取失败：${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                }
+            }
             "settings" -> onSettings()
             "tohome" -> if (t.isHome) Toast.makeText(ctx, "请先打开一个网页", Toast.LENGTH_SHORT).show() else {
                 b.updateShortcuts(b.shortcuts.filter { it.url != t.url } + Entry(t.title.ifBlank { displayUrl(t.url) }.take(20), t.url ?: ""))
@@ -151,6 +173,8 @@ fun BrowserApp(b: Browser, shot: String?, onSettings: () -> Unit, onFinish: () -
     }
     listSheet?.let { kind -> EntrySheet(kind, b) { listSheet = null } }
     if (showAi) AiSheet(b) { showAi = false }
+    if (b.ttsPlaying || b.ttsStatus != null) TtsBar(b)
+    } // Box overlay root
 }
 
 fun displayUrl(u: String?): String = u?.let { Uri.parse(it).host?.removePrefix("www.") ?: it } ?: ""
@@ -473,6 +497,7 @@ fun MoreSheet(b: Browser, onDismiss: () -> Unit, onAction: (String) -> Unit) {
         Triple("reload", "刷新", Icons.Filled.Refresh),
         Triple("share", "分享", Icons.Outlined.Share),
         Triple("ai", "AI 摘要", Icons.Filled.AutoAwesome),
+        Triple("tts", "朗读本页", Icons.Filled.RecordVoiceOver),
         Triple("tohome", "添加到主页", Icons.Filled.AddToHomeScreen),
         Triple("settings", "设置", Icons.Outlined.Settings),
     )
@@ -537,6 +562,45 @@ fun EntrySheet(kind: String, b: Browser, onDismiss: () -> Unit) {
                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                     modifier = Modifier.clickable { b.go(e.url); onDismiss() }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun TtsBar(b: Browser) {
+    val cs = MaterialTheme.colorScheme
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Surface(
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            color = cs.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            shadowElevation = 8.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Filled.RecordVoiceOver, null, tint = cs.primary)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("朗读中", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        b.ttsStatus ?: "播放中…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                FilledTonalButton(onClick = { b.stopTts() }) {
+                    Icon(Icons.Filled.Stop, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("停止")
+                }
             }
         }
     }

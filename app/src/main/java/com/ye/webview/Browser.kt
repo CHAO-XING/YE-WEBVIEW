@@ -5,6 +5,9 @@ import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.view.ActionMode
+import android.view.Menu
+import android.view.MenuItem
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -18,6 +21,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import org.json.JSONArray
 import java.io.ByteArrayInputStream
 
 class Tab(val id: Long) {
@@ -39,8 +48,20 @@ class Browser(private val act: Activity, val store: Store) {
     var adBlock by mutableStateOf(store.adBlock)
     var shortcuts by mutableStateOf<List<Entry>>(store.shortcuts())
     var demoDialog by mutableStateOf(false)
+    var ttsPlaying by mutableStateOf(false)
+    var ttsStatus by mutableStateOf<String?>(null)
     fun updateShortcuts(l: List<Entry>) { store.saveShortcuts(l); shortcuts = l }
     private var nextId = 1L
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val ttsClient by lazy { TtsClient(store) }
+    val ttsPlayer by lazy {
+        TtsPlayer(act, ttsClient).also { p ->
+            p.setListener { playing, status ->
+                ttsPlaying = playing
+                ttsStatus = status
+            }
+        }
+    }
 
     val tab: Tab get() = tabs[current.coerceIn(0, tabs.size - 1)]
 
@@ -109,10 +130,39 @@ class Browser(private val act: Activity, val store: Store) {
         } catch (_: Throwable) {}
     }
 
-    fun destroyAll() = tabs.forEach { it.webView?.destroy() }
+    fun destroyAll() {
+        ttsPlayer.release()
+        scope.cancel()
+        tabs.forEach { it.webView?.destroy() }
+    }
+
+    fun speakText(text: String) {
+        val t = text.trim()
+        if (t.isEmpty()) return
+        if (!store.ttsEnabled) {
+            android.widget.Toast.makeText(act, "朗读已关闭，请在设置中开启", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        scope.launch { ttsPlayer.speak(t) }
+    }
+
+    fun stopTts() = ttsPlayer.stop()
+
+    companion object {
+        private const val MENU_TTS = 0x54455301 // "TES\x01"
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun createWebView(t: Tab): WebView = WebView(act).apply {
+    private fun createWebView(t: Tab): WebView = object : WebView(act) {
+        override fun startActionMode(callback: ActionMode.Callback?, type: Int): ActionMode? {
+            val wrapped = wrapSelectionCallback(callback)
+            return super.startActionMode(wrapped, type)
+        }
+        override fun startActionMode(callback: ActionMode.Callback?): ActionMode? {
+            val wrapped = wrapSelectionCallback(callback)
+            return super.startActionMode(wrapped)
+        }
+    }.apply {
         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
@@ -161,6 +211,46 @@ class Browser(private val act: Activity, val store: Store) {
             override fun onProgressChanged(view: WebView, p: Int) { t.progress = p }
             override fun onReceivedTitle(view: WebView, title: String?) { t.title = title ?: "" }
             override fun onReceivedIcon(view: WebView, icon: Bitmap?) { t.icon = icon }
+        }
+    }
+
+    private fun wrapSelectionCallback(callback: ActionMode.Callback?): ActionMode.Callback {
+        return object : ActionMode.Callback {
+            override fun onCreateActionMode(mode: ActionMode, menu: Menu): Boolean {
+                val ok = callback?.onCreateActionMode(mode, menu) ?: true
+                if (store.ttsEnabled) menu.add(0, MENU_TTS, Menu.NONE, "朗读")
+                return ok
+            }
+            override fun onPrepareActionMode(mode: ActionMode, menu: Menu): Boolean {
+                val ok = callback?.onPrepareActionMode(mode, menu) ?: false
+                if (store.ttsEnabled && menu.findItem(MENU_TTS) == null) {
+                    menu.add(0, MENU_TTS, Menu.NONE, "朗读")
+                }
+                return ok
+            }
+            override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
+                if (item.itemId == MENU_TTS) {
+                    val w = tab.webView ?: return true
+                    w.evaluateJavascript("(function(){return window.getSelection().toString();})()") { raw ->
+                        val selected = try {
+                            JSONArray("[$raw]").getString(0)
+                        } catch (_: Exception) {
+                            raw?.trim()?.trim('"') ?: ""
+                        }
+                        if (selected.isBlank()) {
+                            android.widget.Toast.makeText(act, "未选中文字", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            speakText(selected)
+                        }
+                        mode.finish()
+                    }
+                    return true
+                }
+                return callback?.onActionItemClicked(mode, item) ?: false
+            }
+            override fun onDestroyActionMode(mode: ActionMode) {
+                callback?.onDestroyActionMode(mode)
+            }
         }
     }
 }

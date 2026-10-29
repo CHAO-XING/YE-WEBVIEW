@@ -54,6 +54,10 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
     var base by remember { mutableStateOf(store.aiBase) }
     var model by remember { mutableStateOf(store.aiModel) }
     var key by remember { mutableStateOf(store.aiKey) }
+    var ttsOn by remember { mutableStateOf(store.ttsEnabled) }
+    var ttsBase by remember { mutableStateOf(store.ttsBase) }
+    var ttsKey by remember { mutableStateOf(store.ttsKey) }
+    var ttsVoice by remember { mutableStateOf(store.ttsVoice) }
     var importStatus by remember { mutableStateOf("当前规则数：${AdBlocker.count()}") }
     var importing by remember { mutableStateOf(false) }
     val engines = listOf("bing" to "Bing", "google" to "Google", "baidu" to "百度", "duckduckgo" to "DuckDuckGo", "custom" to "自定义")
@@ -61,6 +65,7 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
     fun save() {
         store.engine = engine; store.customTemplate = custom.trim(); store.adBlock = adBlock
         store.easyListUrl = listUrl.trim(); store.aiBase = base.trim(); store.aiModel = model.trim(); store.aiKey = key.trim()
+        store.ttsEnabled = ttsOn; store.ttsBase = ttsBase.trim(); store.ttsKey = ttsKey.trim(); store.ttsVoice = ttsVoice.trim()
         android.widget.Toast.makeText(ctx, "已保存", android.widget.Toast.LENGTH_SHORT).show()
         onBack()
     }
@@ -106,6 +111,17 @@ fun SettingsScreen(store: Store, onBack: () -> Unit) {
                 OutlinedTextField(model, { model = it }, Modifier.fillMaxWidth(), label = { Text("模型") }, singleLine = true, shape = RoundedCornerShape(16.dp))
                 OutlinedTextField(key, { key = it }, Modifier.fillMaxWidth(), label = { Text("API Key（仅保存在本机）") }, singleLine = true,
                     visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(16.dp))
+            }
+            Section("朗读（edge-tts）") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("启用朗读", Modifier.weight(1f)); Switch(ttsOn, { ttsOn = it })
+                }
+                OutlinedTextField(ttsBase, { ttsBase = it }, Modifier.fillMaxWidth(), label = { Text("TTS Base URL") },
+                    singleLine = true, shape = RoundedCornerShape(16.dp))
+                OutlinedTextField(ttsKey, { ttsKey = it }, Modifier.fillMaxWidth(), label = { Text("Bearer Token（仅保存在本机）") },
+                    singleLine = true, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(16.dp))
+                OutlinedTextField(ttsVoice, { ttsVoice = it }, Modifier.fillMaxWidth(), label = { Text("Voice") },
+                    singleLine = true, shape = RoundedCornerShape(16.dp))
             }
             Section("主页快捷方式") {
                 Text("在主页点「编辑」或长按图标可增删改；此处可恢复默认。", style = MaterialTheme.typography.bodySmall,
