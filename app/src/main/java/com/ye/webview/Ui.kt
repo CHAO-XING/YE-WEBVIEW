@@ -156,7 +156,7 @@ fun BrowserApp(b: Browser, shot: String?, onSettings: () -> Unit, onFinish: () -
                                 val json = JSONObject(JSONArray("[$raw]").getString(0))
                                 val body = json.optString("text").trim()
                                 if (body.isBlank()) Toast.makeText(ctx, "未能提取到正文", Toast.LENGTH_SHORT).show()
-                                else b.speakText(body.take(12000))
+                                else b.speakText(body.take(12000), "本页")
                             } catch (e: Exception) {
                                 Toast.makeText(ctx, "提取失败：${e.message}", Toast.LENGTH_SHORT).show()
                             }
@@ -174,6 +174,7 @@ fun BrowserApp(b: Browser, shot: String?, onSettings: () -> Unit, onFinish: () -
     listSheet?.let { kind -> EntrySheet(kind, b) { listSheet = null } }
     if (showAi) AiSheet(b) { showAi = false }
     if (b.ttsPlaying || b.ttsStatus != null) TtsBar(b)
+    else if (b.showSelectionTtsFallback) SelectionTtsBar(b)
     } // Box overlay root
 }
 
@@ -587,9 +588,18 @@ fun TtsBar(b: Browser) {
                 Icon(Icons.Filled.RecordVoiceOver, null, tint = cs.primary)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("朗读中", style = MaterialTheme.typography.titleSmall)
+                    Text("朗读 · ${b.ttsSource}", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        b.ttsStatus ?: "播放中…",
+                        buildString {
+                            if (b.ttsIndex > 0 && b.ttsTotal > 0) append("句子 ${b.ttsIndex}/${b.ttsTotal}")
+                            val status = b.ttsStatus
+                            if (!status.isNullOrBlank()) {
+                                if (isNotEmpty()) append(" · ")
+                                append(status)
+                            } else if (isEmpty()) {
+                                append("播放中…")
+                            }
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = cs.onSurfaceVariant,
                         maxLines = 1,
@@ -600,6 +610,35 @@ fun TtsBar(b: Browser) {
                     Icon(Icons.Filled.Stop, null, Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("停止")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SelectionTtsBar(b: Browser) {
+    val cs = MaterialTheme.colorScheme
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Surface(
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+            color = cs.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            shadowElevation = 8.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.navigationBars)
+        ) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Filled.RecordVoiceOver, null, tint = cs.primary)
+                Spacer(Modifier.width(10.dp))
+                Text("已选中文字", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                FilledTonalButton(onClick = { b.readSelection() }) { Text("朗读选中") }
+                IconButton({ b.dismissSelectionFallback() }) {
+                    Icon(Icons.Filled.Close, "关闭", Modifier.size(18.dp))
                 }
             }
         }
