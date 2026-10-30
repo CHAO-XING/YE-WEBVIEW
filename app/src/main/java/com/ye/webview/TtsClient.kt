@@ -126,6 +126,26 @@ class TtsClient(private val store: Store) {
         return mergeShort(chunks, limit)
     }
 
+    fun splitUtterances(text: String, maxChars: Int = 400): List<String> {
+        val limit = maxChars.coerceAtLeast(40)
+        val normalized = text.replace("\r\n", "\n").replace('\r', '\n')
+        if (normalized.isBlank()) return emptyList()
+
+        val result = ArrayList<String>()
+        for (sentence in splitSentences(normalized)) {
+            var rest = sentence.trim()
+            if (rest.isEmpty()) continue
+            while (rest.length > limit) {
+                val cut = breakIndex(rest, limit)
+                val head = rest.substring(0, cut).trim()
+                if (head.isNotEmpty()) result += head
+                rest = rest.substring(cut).trim()
+            }
+            if (rest.isNotEmpty()) result += rest
+        }
+        return result
+    }
+
     private fun splitSentences(text: String): List<String> {
         val result = ArrayList<String>()
         val buffer = StringBuilder()
